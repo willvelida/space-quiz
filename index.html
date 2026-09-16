@@ -571,6 +571,111 @@
       color: var(--muted);
     }
 
+    .review {
+      margin-top: 30px;
+      padding-top: 24px;
+      border-top: 1px solid var(--panel-edge);
+      text-align: left;
+    }
+
+    .review-title {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: -0.02em;
+    }
+
+    .review-summary,
+    .review-perfect {
+      margin: 6px 0 0;
+      color: var(--muted);
+    }
+
+    .review-perfect {
+      padding: 16px;
+      border: 1px solid var(--correct);
+      border-radius: 5px;
+      background: var(--correct-soft);
+      color: var(--correct);
+      font-weight: 750;
+    }
+
+    .review-list {
+      display: grid;
+      gap: 14px;
+      margin: 18px 0 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: missed-question;
+    }
+
+    .review-item {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--wrong);
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--surface-solid) 88%, transparent);
+      counter-increment: missed-question;
+    }
+
+    .review-question {
+      display: flex;
+      gap: 9px;
+      margin: 0 0 13px;
+      font-size: 16px;
+      line-height: 1.35;
+    }
+
+    .review-question::before {
+      content: counter(missed-question, decimal-leading-zero);
+      flex: 0 0 auto;
+      color: var(--wrong);
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      line-height: 1.8;
+    }
+
+    .review-answers {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .review-answer {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .review-answer dt {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .review-answer dd {
+      margin: 0;
+      font-weight: 700;
+    }
+
+    .review-answer.selected dd {
+      color: var(--wrong);
+    }
+
+    .review-answer.correct dd {
+      color: var(--correct);
+    }
+
+    .review-fact {
+      margin: 13px 0 0;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
     @keyframes shake {
       0%, 100% { transform: translateX(0); }
       20% { transform: translateX(-8px); }
@@ -659,6 +764,11 @@
       .next-button {
         width: 100%;
       }
+
+      .review-answer {
+        grid-template-columns: 1fr;
+        gap: 2px;
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -721,6 +831,10 @@
         <p class="result-label">Your final score</p>
         <p class="final-score"><span id="final-score">0</span>/10</p>
         <p class="result-message" id="result-message"></p>
+        <section class="review" aria-labelledby="review-title">
+          <h3 class="review-title" id="review-title">Mission review</h3>
+          <div id="review-content"></div>
+        </section>
         <button class="restart-button" id="restart-button" type="button">Launch again</button>
       </div>
       <div class="console-footer" aria-hidden="true">
@@ -819,10 +933,12 @@
     const nextButton = document.querySelector("#next-button");
     const restartButton = document.querySelector("#restart-button");
     const celebration = document.querySelector("#celebration");
+    const reviewContent = document.querySelector("#review-content");
 
     let currentQuestion = 0;
     let score = 0;
     let answered = false;
+    const selectedAnswers = Array(questions.length).fill(null);
 
     function renderQuestion() {
       const item = questions[currentQuestion];
@@ -852,6 +968,7 @@
 
       const item = questions[currentQuestion];
       const buttons = [...answersElement.children];
+      selectedAnswers[currentQuestion] = selectedIndex;
       buttons.forEach((button) => {
         button.disabled = true;
       });
@@ -877,11 +994,73 @@
       nextButton.focus();
     }
 
+    function renderReview() {
+      const missedQuestions = questions
+        .map((item, index) => ({ item, selectedIndex: selectedAnswers[index] }))
+        .filter(({ item, selectedIndex }) => selectedIndex !== item.correct);
+
+      reviewContent.replaceChildren();
+
+      if (missedQuestions.length === 0) {
+        const confirmation = document.createElement("p");
+        confirmation.className = "review-perfect";
+        confirmation.textContent = "Perfect flight — there are no missed questions to review.";
+        reviewContent.append(confirmation);
+        return;
+      }
+
+      const summary = document.createElement("p");
+      summary.className = "review-summary";
+      summary.textContent = `Review ${missedQuestions.length} missed ${missedQuestions.length === 1 ? "question" : "questions"} before your next launch.`;
+
+      const list = document.createElement("ol");
+      list.className = "review-list";
+
+      missedQuestions.forEach(({ item, selectedIndex }) => {
+        const listItem = document.createElement("li");
+        listItem.className = "review-item";
+
+        const question = document.createElement("h4");
+        question.className = "review-question";
+        question.textContent = item.question;
+
+        const answers = document.createElement("dl");
+        answers.className = "review-answers";
+
+        [
+          ["Your answer", item.answers[selectedIndex], "selected"],
+          ["Correct answer", item.answers[item.correct], "correct"]
+        ].forEach(([label, answer, className]) => {
+          const answerRow = document.createElement("div");
+          answerRow.className = `review-answer ${className}`;
+
+          const term = document.createElement("dt");
+          term.textContent = label;
+
+          const description = document.createElement("dd");
+          description.textContent = answer;
+
+          answerRow.append(term, description);
+          answers.append(answerRow);
+        });
+
+        const fact = document.createElement("p");
+        fact.className = "review-fact";
+        fact.textContent = item.fact;
+
+        listItem.append(question, answers, fact);
+        list.append(listItem);
+      });
+
+      reviewContent.append(summary, list);
+    }
+
     function showResults() {
       quiz.classList.add("hidden");
       results.classList.add("visible");
       results.classList.toggle("celebrating", score >= 8);
       document.querySelector("#final-score").textContent = score;
+      renderReview();
 
       const reaction = document.querySelector("#reaction");
       const title = document.querySelector("#result-title");
@@ -939,9 +1118,11 @@
     restartButton.addEventListener("click", () => {
       currentQuestion = 0;
       score = 0;
+      selectedAnswers.fill(null);
       results.classList.remove("visible");
       results.classList.remove("celebrating");
       celebration.replaceChildren();
+      reviewContent.replaceChildren();
       quiz.classList.remove("hidden");
       renderQuestion();
     });
